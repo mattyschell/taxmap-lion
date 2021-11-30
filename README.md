@@ -1,35 +1,25 @@
 # Background
 
-Approximately 4 times a year the Department of Finance asks DoITT to refresh
-the "LION Subset" data used in the digital tax map.  The source of this data
-is both  the LION release from the Dept. of City Planning and CSCL Centerlines.
+Several times each year the NYC Department of Finance asks the Department of Information Technology and Telecommunications to refresh the "LION Subset" data used in the Digital Tax Map.  The source of this data is both the [LION](https://github.com/mattyschell/nyc-spatial-rolodex/wiki/Lion) release from the Dept. of City Planning and CSCL [Centerlines](https://github.com/CityOfNewYork/nyc-geo-metadata/blob/master/Metadata/Metadata_StreetCenterline.md).
 
-In the Digital Taxmap this logical dataset is copied into two physical datasets.
-First, there is an ESRI geodatabase-registered feature class 
-dof_taxmap.LION_SUBSET_SDE that Dept. of Finance users refer to in their map 
-documents as an editing reference.  Second, there's an Oracle spatial table named 
-CSCL_CENTERLINE that contains data which we use for generating street labels on 
-taxmap tiles.
+In the Digital Tax Map this logical dataset is copied into two physical datasets. First, there is a feature class registered with the ESRI Enterprise Geodatabase named 
+dof_taxmap.LION_SUBSET_SDE.  Department of Finance users refer to the LION feature class in the DTM Maintenance applications ("wizards"). Second, there is an Oracle spatial table named CSCL_CENTERLINE that contains data which we use for generating street labels on taxmap tiles visible to the public.
 
 
 # Part A: Upload LION Subset
 
-1.	Download new LION data and place on T Drive
+1.	Download new [LION](https://github.com/mattyschell/nyc-spatial-rolodex/wiki/Lion) data and unzip it to your favorite chaotic network drive. 
 
-2.	In python stg first then prod:
+2.	Requires arcpy (python 2.x).  Update staging first, review, then repeat in production. 
 
 ```shell
-> python
+> C:\Python27\ArcGIS10.6\python.exe
 >>> from featureclassupdate import *
->>> prodnew = EsriFeatureClass("C:\\arcgis_connections\\arcgisconnections-dof_taxmap@geocprd (dof_taxmap).sde", 'LION_SUBSET_SDE_new')
->>> prodnew.copytosde("T:\GIS_ORTHO\Spatial Data\DCP\LION\Current\\18B\\nyclion_18b\lion\lion.gdb\lion",'N')
+>>> prodnew = EsriFeatureClass("C:\\pathtosdefiles\\taxmapsdefile.sde", 'LION_SUBSET_SDE_NEW')
+>>> prodnew.copytosde("X:\\unmitigated\\disaster\\DCP\\LION\\Current\\21D\\lion\lion.gdb\lion",'N')
 >>> prodnew.updateprivileges()
-```
-
-```shell
-> python
->>> prod = EsriFeatureClass("C:\\arcgis_connections\\arcgisconnections-dof_taxmap@geocprd (dof_taxmap).sde", 'LION_SUBSET_SDE')
->>> prod.rename('LION_SUBSET_SDE_17C')
+>>> prod = EsriFeatureClass("C:\\pathtosdefiles\\taxmapsdefile.sde", 'LION_SUBSET_SDE')
+>>> prod.rename('LION_SUBSET_SDE_20A')
 >>> prodnew.rename('LION_SUBSET_SDE')
 ```
 
@@ -43,17 +33,16 @@ Reverse-engineering the requirements, street labels on the digital taxmap should
 3. Include bike lanes
 4. Not include ferry routes 
 
-Example, this should be scripted up and .sde files added to resources when 
-blessed by DOF.
+Example, this should be scripted up and .sde files added to resources when blessed by DOF.
 
 ```shell
 > REM jump back to python 2.7 if necessary 
 > REM set PATH=C:\Python27\ArcGIS10.6;%PATH%
 > python
 >>> import featureclassupdate
->>> csclsource = featureclassupdate.EsriFeatureClass("C:/arcgisconnections/mschell@csclcprd.sde",'CSCL_PUB.Centerline')
->>> cscltargettemp = featureclassupdate.EsriFeatureClass("C:/matt_projects/database_utils/arcgisconnections/dof_taxmap@geocdev (dof_taxmap).sde",'CSCL_TEMP_SDO')
->>> csclcenterline = featureclassupdate.EsriFeatureClass("C:/matt_projects/database_utils/arcgisconnections/dof_taxmap@geocdev (dof_taxmap).sde",'CSCL_CENTERLINE')
+>>> csclsource = featureclassupdate.EsriFeatureClass("C:\\pathtosdefiles\\taxmapsdefile.sde",'CSCL_PUB.Centerline')
+>>> cscltargettemp = featureclassupdate.EsriFeatureClass("C:\\pathtosdefiles\\taxmapsdefile.sde",'CSCL_TEMP_SDO')
+>>> csclcenterline = featureclassupdate.EsriFeatureClass("C:\\pathtosdefiles\\taxmapsdefile.sde",'CSCL_CENTERLINE')
 >>> cscltargettemp.copytosde(csclsource.featureclass,'N','SDO_GEOMETRY','1=1')
 >>> csclcenterline.truncate()
 >>> csclcenterline.populate_hardcodecolumns(cscltargettemp)
@@ -62,9 +51,7 @@ blessed by DOF.
 >>> cscltargettemp.delete()
 ```
 
-Reminder on fixing invalid geometries.  The DOF_TAXMAP user-schema geodatabase 
-shadows some oracle functions with ESRI functions of the same name.  Ordinarily
-the MDSYS prefix is unnecessary.
+Reminder on fixing invalid geometries.  The DOF_TAXMAP user-schema geodatabase shadows some oracle functions with ESRI functions of the same name.  Ordinarily the MDSYS prefix is unnecessary.
 
 ```sql
 update 
@@ -77,10 +64,7 @@ where
 
 # Part C: Regenerate Tiles
 
-The plan we have cooked up for now is to connect to the tile host and delete
-all zoom levels where street labels appear.  Then recreate tiles for the default
-zoom of the application when searching for a lot, +/- 1 zoom (3 total).  All 
-other zoom levels with street labels can fill in from ad hoc use.
+The plan we have cooked up for now is to connect to the tile host and delete all zoom levels where street labels appear.  Then recreate tiles for the default zoom of the application when searching for a lot, +/- 1 zoom (3 total).  All other zoom levels with street labels can fill in from ad hoc use.
 
 ## C1: Delete or rename zoom levels 8-13.  Sample staging directories after this step:
 
@@ -115,12 +99,10 @@ drwxr-xr-x 241 gis gis 20480 Jun 26  2015 dtm_13x
 
 ## C2 option 2: Seed 9, 10, and 11 without the GUI
 
-We take this approach when the gis-ogc containers flake out too much to make 
-the GUI seed process tenable.  For a single zoom (9 in the example) keep at 
-least one thread going until all tiles are seeded.
+We take this approach because gis-ogc containers segmentation fault so often that the GUI seed process is untenable.  The goal, for a single zoom (9 in the example), is to keep at least one thread going until all tiles are seeded.
 
 ```shell
-> REM set python 2.7 if you default to 3
+> REM set python 2.7 if you default to 3.x
 > set PATH=C:\Python27\ArcGIS10.6;%PATH%
 > python sisyphustiles.py dtm notadmin iluvdoitt247 2263 9 png seed "http://*******/geowebcache/rest/seed/dtm.json"
 
