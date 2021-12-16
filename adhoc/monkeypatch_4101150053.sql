@@ -44,7 +44,7 @@ select
     mp_4101150053seq.nextval
    ,physicalid
    ,stname_lab
-   ,shape
+   ,mdsys.sdo_cs.transform(shape,41088)
 from mp_4101150053;
 commit;
 --run the tile business and verify
